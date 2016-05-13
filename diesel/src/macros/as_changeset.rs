@@ -166,18 +166,13 @@ macro_rules! AsChangeset {
         }
         __diesel_call_if_includes_id! {
             search = $field_names,
-            callback = AsChangeset_sqlite_save_changes_impl,
+            callbacks = [AsChangeset_sqlite_save_changes_impl, AsChangeset_postgres_save_changes_impl],
             args = (
                 table_name = $table_name,
                 struct_ty = $struct_ty,
                 lifetimes = ($($lifetime),*),
             ),
         }
-        // AsChangeset_postgres_save_changes_impl! {
-        //     table_name = $table_name,
-        //     struct_ty = $struct_ty,
-        //     lifetimes = ($($lifetime),*),
-        // }
     };
 }
 

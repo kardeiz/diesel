@@ -298,6 +298,19 @@ macro_rules!  __diesel_parse_as_item {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __diesel_call_if_includes_id {
+    // Allow multiple callbacks to be passed
+    (
+        search = $search:tt,
+        callbacks = [$($callback:ident),+],
+        args = $args:tt,
+    ) => {
+        $(__diesel_call_if_includes_id! {
+            search = $search,
+            callback = $callback,
+            args = $args,
+        })+
+    };
+
     // We found `id`, call the callback
     (
         search = [id $($search:ident)*],
