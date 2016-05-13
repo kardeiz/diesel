@@ -203,10 +203,11 @@ fn sql_syntax_is_correct_when_option_field_comes_mixed_with_non_option() {
     insert(&new_post).into(posts::table).execute(&connection).unwrap();
 
     let changes = Changes { user_id: 1, title: None, body: "earth".into() };
-    update(posts::table)
-        .set(&changes)
-        .execute(&connection)
-        .unwrap();
+    <_ as ExecuteDsl<_>>::execute(&update(posts::table).set(&changes), &connection).unwrap();
+    // update(posts::table)
+    //     .set(&changes)
+    //     .execute(&connection)
+    //     .unwrap();
     let post = posts::table.order(posts::id.desc()).first::<Post>(&connection).unwrap();
 
     let expected_post = Post::new(post.id, sean.id, "Hello".into(), Some("earth".into()));

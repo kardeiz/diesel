@@ -25,7 +25,7 @@ macro_rules! AsChangeset {
 
     // Handle struct with lifetimes
     (
-        ($table_name:ident, treat_none_as_null=$treat_none_as_null:expr)
+        ($table_name:ident, treat_none_as_null=$treat_none_as_null:tt)
         $struct_name:ident <$($lifetime:tt),*>
         $body:tt $(;)*
     ) => {
@@ -45,7 +45,7 @@ macro_rules! AsChangeset {
     // Handle struct with no lifetimes. We pass a dummy lifetime to reduce
     // the amount of branching later.
     (
-        ($table_name:ident, treat_none_as_null=$treat_none_as_null:expr)
+        ($table_name:ident, treat_none_as_null=$treat_none_as_null:tt)
         $struct_name:ident
         $body:tt $(;)*
     ) => {
@@ -67,7 +67,7 @@ macro_rules! AsChangeset {
         (
             struct_name = $struct_name:ident,
             table_name = $table_name:ident,
-            treat_none_as_null = $treat_none_as_null:expr,
+            treat_none_as_null = $treat_none_as_null:tt,
             $($headers:tt)*
         ),
         fields = $fields:tt,
@@ -126,7 +126,7 @@ macro_rules! AsChangeset {
         AsChangeset! {
             $($headers)*
             self_to_columns = $struct_name { $($field_name: ref $column_name),+ },
-            columns = ($($column_name, $field_ty, $field_kind),+),
+            columns = ($($column_name, $field_kind),+),
             field_names = [$($field_name)+],
             changeset_ty = $changeset_ty,
         }
@@ -135,7 +135,7 @@ macro_rules! AsChangeset {
     // Construct final impl
     (
         table_name = $table_name:ident,
-        treat_none_as_null = $treat_none_as_null:expr,
+        treat_none_as_null = $treat_none_as_null:tt,
         struct_ty = $struct_ty:ty,
         lifetimes = ($($lifetime:tt),*),
         self_to_columns = $self_to_columns:pat,
@@ -183,7 +183,7 @@ macro_rules! AsChangeset {
 
 #[doc(hidden)]
 #[macro_export]
-AsChangeset_construct_changeset_ty! {
+macro_rules! AsChangeset_construct_changeset_ty {
     // Handle option field when treat none as null is false
     (
         $headers:tt,
@@ -218,7 +218,7 @@ AsChangeset_construct_changeset_ty! {
     (
         $headers:tt,
         table_name = $table_name:ident,
-        treat_none_as_null = $treat_none_as_null:expr,
+        treat_none_as_null = $treat_none_as_null:tt,
         fields = [{
             $(field_name: $field_name:ident,)*
             column_name: $column_name:ident,
@@ -248,7 +248,7 @@ AsChangeset_construct_changeset_ty! {
     (
         $headers:tt,
         table_name = $table_name:ident,
-        treat_none_as_null = $treat_none_as_null:expr,
+        treat_none_as_null = $treat_none_as_null:tt,
         fields = [],
         changeset_ty = $changeset_ty:ty,
     ) => {
@@ -314,8 +314,38 @@ macro_rules! AsChangeset_sqlite_save_changes_impl {
         }
     }};
 }
-        // AsChangeset_postgres_save_changes_impl! {
-        //     table_name = $table_name,
-        //     struct_ty = $struct_ty,
-        //     lifetimes = ($($lifetime),*),
-        // }
+
+#[doc(hidden)]
+#[macro_export]
+#[cfg(not(feature = "postgres"))]
+macro_rules! AsChangeset_postgres_save_changes_impl {
+    ($($args:tt)*) => {}
+}
+
+#[doc(hidden)]
+#[macro_export]
+#[cfg(feature = "postgres")]
+macro_rules! AsChangeset_postgres_save_changes_impl {
+    (
+        table_name = $table_name:ident,
+        struct_ty = $struct_ty:ty,
+        lifetimes = ($($lifetime:tt),+),
+    ) => { __diesel_parse_as_item! {
+        impl<$($lifetime),+> SaveChangesDsl<
+            $crate::pg::PgConnection,
+            $table_name::SqlType,
+        > for $struct_ty {
+            fn save_changes<T>(
+                &self,
+                conn: &$crate::pg::PgConnection
+            ) -> $crate::QueryResult<T> where
+                T: Queryable<$table_name::SqlType, $crate::pg::Pg>,
+            {
+                let target = $table_name::table.primary_key().eq(&self.id);
+                $crate::update($table_name::table.filter(target))
+                    .set(self)
+                    .get_result(conn)
+            }
+        }
+    }};
+}
