@@ -182,11 +182,19 @@ fn sql_syntax_is_correct_when_option_field_comes_before_non_option() {
 
 #[test]
 fn sql_syntax_is_correct_when_option_field_comes_mixed_with_non_option() {
-    #[changeset_for(posts)]
+    // #[changeset_for(posts)]
     struct Changes {
         user_id: i32,
         title: Option<String>,
         body: String,
+    }
+
+    AsChangeset! { (posts)
+    struct Changes {
+        user_id: i32,
+        title: Option<String>,
+        body: String,
+    }
     }
 
     let connection = connection_with_sean_and_tess_in_users_table();
@@ -207,9 +215,15 @@ fn sql_syntax_is_correct_when_option_field_comes_mixed_with_non_option() {
 
 #[test]
 fn can_update_with_struct_containing_single_field() {
-    #[changeset_for(posts)]
+    // #[changeset_for(posts)]
     struct SetBody {
         body: String,
+    }
+
+    AsChangeset! { (posts)
+    struct SetBody {
+        body: String,
+    }
     }
 
     let connection = connection_with_sean_and_tess_in_users_table();
@@ -230,11 +244,19 @@ fn can_update_with_struct_containing_single_field() {
 
 #[test]
 fn struct_with_option_fields_treated_as_null() {
-    #[changeset_for(posts, treat_none_as_null="true")]
+    // #[changeset_for(posts, treat_none_as_null="true")]
     struct UpdatePost {
         id: i32,
         title: String,
         body: Option<String>,
+    }
+
+    AsChangeset! { (posts, treat_none_as_null="true")
+    struct UpdatePost {
+        id: i32,
+        title: String,
+        body: Option<String>,
+    }
     }
 
     let connection = connection_with_sean_and_tess_in_users_table();

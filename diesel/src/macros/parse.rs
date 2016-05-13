@@ -293,3 +293,104 @@ macro_rules! __diesel_parse_struct_body {
 macro_rules!  __diesel_parse_as_item {
     ($i:item) => { $i }
 }
+
+/// Calls the given callback if the list of idents includes the ident `id`
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __diesel_call_if_includes_id {
+    // We found `id`, call the callback
+    (
+        search = [id $($search:ident)*],
+        callback = $callback:ident,
+        args = ($($args:tt)*),
+    ) => {
+        $callback!($($args)*);
+    };
+
+    // Continue searching for `id`
+    (
+        search = [$head:ident $($tail:ident)*],
+        callback = $callback:ident,
+        args = $args:tt,
+    ) => {
+        __diesel_call_if_includes_id! {
+            search = [$($tail)*],
+            callback = $callback,
+            args = $args,
+        }
+    };
+
+    // We did not find `id`, do nothing
+    (
+        search = [],
+        callback = $callback:ident,
+        args = $args:tt,
+    ) => {};
+}
+
+#[cfg(test)]
+#[allow(unreachable_code)]
+mod call_if_includes_id_tests {
+    macro_rules! insert_return {
+        () => { return }
+    }
+
+    #[test]
+    fn when_given_exactly_id() {
+        __diesel_call_if_includes_id! {
+            search = [id],
+            callback = insert_return,
+            args = (),
+        }
+        assert!(false)
+    }
+
+    #[test]
+    fn when_given_list_starting_with_id() {
+        __diesel_call_if_includes_id! {
+            search = [id foo bar],
+            callback = insert_return,
+            args = (),
+        }
+        assert!(false)
+    }
+
+    #[test]
+    fn when_given_list_containing_id() {
+        __diesel_call_if_includes_id! {
+            search = [foo id bar],
+            callback = insert_return,
+            args = (),
+        }
+        assert!(false)
+    }
+
+    #[test]
+    fn args_are_passed_to_macro() {
+        __diesel_call_if_includes_id! {
+            search = [id],
+            callback = assert,
+            args = (true),
+        }
+    }
+
+    #[test]
+    fn callback_not_called_when_list_is_empty() {
+        __diesel_call_if_includes_id! {
+            search = [],
+            callback = assert,
+            args = (false),
+        }
+        return; // If the test body were empty we fail to compile
+    }
+
+    #[test]
+    fn callback_not_called_when_list_doesnt_contain_id() {
+        __diesel_call_if_includes_id! {
+            search = [foo bar],
+            callback = assert,
+            args = (false),
+        }
+        return; // If the test body were empty we fail to compile
+    }
+}
