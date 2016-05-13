@@ -62,70 +62,93 @@ macro_rules! AsChangeset {
         }
     };
 
-    // Receive parsed fields of tuple struct from `__diesel_parse_struct_body`
+    // Receive parsed fields of struct from `__diesel_parse_struct_body`
     (
         (
             struct_name = $struct_name:ident,
+            table_name = $table_name:ident,
+            treat_none_as_null = $treat_none_as_null:expr,
             $($headers:tt)*
         ),
-        fields = [$({
-            column_name: $column_name:ident,
-            field_ty: $field_ty:ty,
-            field_kind: $field_kind:ident,
-        })+],
+        fields = $fields:tt,
+    ) => {
+        AsChangeset_construct_changeset_ty! {
+            (
+                fields = $fields,
+                struct_name = $struct_name,
+                table_name = $table_name,
+                treat_none_as_null = $treat_none_as_null,
+                $($headers)*
+            ),
+            table_name = $table_name,
+            treat_none_as_null = $treat_none_as_null,
+            fields = $fields,
+            changeset_ty = (),
+        }
+    };
+
+    // Receive changeset ty when tuple struct from `AsChangeset_construct_changeset_ty`
+    (
+        (
+            fields = [$({
+                column_name: $column_name:ident,
+                field_ty: $field_ty:ty,
+                field_kind: $field_kind:ident,
+            })+],
+            struct_name = $struct_name:ident,
+            $($headers:tt)*
+        ),
+        changeset_ty = $changeset_ty:ty,
     ) => {
         AsChangeset! {
             $($headers)*
             self_to_columns = $struct_name($(ref $column_name),+),
-            columns = ($($column_name, $field_ty, $field_kind),+),
+            columns = ($($column_name, $field_kind),+),
             field_names = [],
+            changeset_ty = $changeset_ty,
         }
     };
 
-    // Receive parsed fields of normal struct from `__diesel_parse_struct_body`
+    // Receive changeset ty when named struct from `AsChangeset_construct_changeset_ty`
     (
         (
+            fields = [$({
+                field_name: $field_name:ident,
+                column_name: $column_name:ident,
+                field_ty: $field_ty:ty,
+                field_kind: $field_kind:ident,
+            })+],
             struct_name = $struct_name:ident,
             $($headers:tt)*
         ),
-        fields = [$({
-            field_name: $field_name:ident,
-            column_name: $column_name:ident,
-            field_ty: $field_ty:ty,
-            field_kind: $field_kind:ident,
-        })+],
+        changeset_ty = $changeset_ty:ty,
     ) => {
         AsChangeset! {
             $($headers)*
             self_to_columns = $struct_name { $($field_name: ref $column_name),+ },
             columns = ($($column_name, $field_ty, $field_kind),+),
             field_names = [$($field_name)+],
+            changeset_ty = $changeset_ty,
         }
     };
 
+    // Construct final impl
     (
         table_name = $table_name:ident,
         treat_none_as_null = $treat_none_as_null:expr,
         struct_ty = $struct_ty:ty,
         lifetimes = ($($lifetime:tt),*),
         self_to_columns = $self_to_columns:pat,
-        columns = ($($column_name:ident, $field_ty:ty, $field_kind:ident),+),
+        columns = ($($column_name:ident, $field_kind:ident),+),
         field_names = $field_names:tt,
+        changeset_ty = $changeset_ty:ty,
     ) => {
         __diesel_parse_as_item! {
             impl<$($lifetime: 'update,)* 'update> $crate::query_builder::AsChangeset
                 for &'update $struct_ty
             {
                 type Target = $table_name::table;
-                type Changeset = ($(
-                    Option<$crate::expression::predicates::Eq<
-                        $table_name::$column_name,
-                        $crate::expression::bound::Bound<
-                            <$table_name::$column_name as $crate::expression::Expression>::SqlType,
-                            &'update $field_ty,
-                        >,
-                    >>
-                ,)+);
+                type Changeset = $changeset_ty;
 
                 #[allow(non_shorthand_field_patterns)]
                 fn as_changeset(self) -> Self::Changeset {
@@ -160,6 +183,81 @@ macro_rules! AsChangeset {
 
 #[doc(hidden)]
 #[macro_export]
+AsChangeset_construct_changeset_ty! {
+    // Handle option field when treat none as null is false
+    (
+        $headers:tt,
+        table_name = $table_name:ident,
+        treat_none_as_null = "false",
+        fields = [{
+            $(field_name: $field_name:ident,)*
+            column_name: $column_name:ident,
+            field_ty: Option<$field_ty:ty>,
+            field_kind: option,
+        } $($tail:tt)*],
+        changeset_ty = ($($changeset_ty:ty,)*),
+    ) => {
+        AsChangeset_construct_changeset_ty! {
+            $headers,
+            table_name = $table_name,
+            treat_none_as_null = "false",
+            fields = [$($tail)*],
+            changeset_ty = ($($changeset_ty,)*
+                Option<$crate::expression::predicates::Eq<
+                    $table_name::$column_name,
+                    $crate::expression::bound::Bound<
+                        <$table_name::$column_name as $crate::expression::Expression>::SqlType,
+                        &'update $field_ty,
+                    >,
+                >>,
+            ),
+        }
+    };
+
+    // Handle normal field or option when treat none as null is true
+    (
+        $headers:tt,
+        table_name = $table_name:ident,
+        treat_none_as_null = $treat_none_as_null:expr,
+        fields = [{
+            $(field_name: $field_name:ident,)*
+            column_name: $column_name:ident,
+            field_ty: $field_ty:ty,
+            $($ignore:tt)*
+        } $($tail:tt)*],
+        changeset_ty = ($($changeset_ty:ty,)*),
+    ) => {
+        AsChangeset_construct_changeset_ty! {
+            $headers,
+            table_name = $table_name,
+            treat_none_as_null = $treat_none_as_null,
+            fields = [$($tail)*],
+            changeset_ty = ($($changeset_ty,)*
+                $crate::expression::predicates::Eq<
+                    $table_name::$column_name,
+                    $crate::expression::bound::Bound<
+                        <$table_name::$column_name as $crate::expression::Expression>::SqlType,
+                        &'update $field_ty,
+                    >,
+                >,
+            ),
+        }
+    };
+
+    // Finished parsing
+    (
+        $headers:tt,
+        table_name = $table_name:ident,
+        treat_none_as_null = $treat_none_as_null:expr,
+        fields = [],
+        changeset_ty = $changeset_ty:ty,
+    ) => {
+        AsChangeset!($headers, changeset_ty = $changeset_ty,);
+    }
+}
+
+#[doc(hidden)]
+#[macro_export]
 macro_rules! AsChangeset_column_expr {
     // When none_as_null is false, we don't update fields which aren't present
     (
@@ -177,7 +275,7 @@ macro_rules! AsChangeset_column_expr {
         $field_access:expr,
         $($args:tt)*
     ) => {
-        Some($column.eq($field_access))
+        $column.eq($field_access)
     };
 }
 
