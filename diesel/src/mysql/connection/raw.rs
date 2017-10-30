@@ -26,7 +26,7 @@ impl RawConnection {
         let charset_result = unsafe { ffi::mysql_options(
             result.0,
             ffi::mysql_option::MYSQL_SET_CHARSET_NAME,
-            b"utf8mb4\0".as_ptr() as *const libc::c_void,
+            b"utf8\0".as_ptr() as *const libc::c_void,
         ) };
         assert_eq!(0, charset_result, "MYSQL_SET_CHARSET_NAME was not \
                    recognized as an option by MySQL. This should never \
